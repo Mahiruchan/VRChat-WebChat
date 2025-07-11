@@ -2,8 +2,6 @@
 
 一个通过网页向 VRChat 发送消息的工具，方便在 VR 中快速打字、发送预设消息。
 
-![VRChat-WebChat 界面截图](https://raw.githubusercontent.com/your-username/VRChat-WebChat/main/screenshot.png) <!-- 请替换为实际的截图链接 -->
-
 ## 特性
 
 - **网页操作**: 在任何支持浏览器的设备上（电脑、手机）打开网页即可向 VRChat 发送消息。
