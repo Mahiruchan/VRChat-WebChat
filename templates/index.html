@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VRChat-WebChat</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+    <style>
+        :root {
+            --background-color: #1a1a1a;
+            --card-background-color: #242424;
+            --card-border-color: #333;
+            --primary-color: #007bff;
+            --primary-hover-color: #0056b3;
+            --text-color: #e0e0e0;
+            --muted-text-color: #888;
+        }
+
+        [data-theme="dark"] {
+            --background-color: #1a1a1a;
+            --card-background-color: #242424;
+            --card-border-color: #363636;
+            --primary-color: #007bff;
+            --primary-hover-color: #0056b3;
+            --text-color: #f0f0f0;
+            --muted-text-color: #a0a0a0;
+            --pico-form-element-background-color: #333;
+            --pico-form-element-border-color: #444;
+            --pico-form-element-focus-border-color: var(--primary-color);
+        }
+
+        body {
+            background-color: var(--background-color);
+            color: var(--text-color);
+            padding-bottom: 100px; /* Space for the fixed footer */
+        }
+
+        .container {
+            max-width: 900px;
+            padding-top: 2rem;
+        }
+
+        h1 {
+            color: var(--primary-color);
+            text-align: center;
+            margin-bottom: 0.5rem;
+        }
+
+        h2 {
+            text-align: center;
+            color: var(--muted-text-color);
+            font-weight: 400;
+            margin-bottom: 3rem;
+        }
+
+        .card {
+            background-color: var(--card-background-color);
+            border: 1px solid var(--card-border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .preset-buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 0.75rem;
+        }
+
+        .preset-button {
+            background-color: transparent;
+            border: 1px solid var(--primary-color);
+            color: var(--primary-color);
+            transition: all 0.2s ease-in-out;
+        }
+
+        .preset-button:hover {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .add-preset-form {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+        }
+
+        #addPresetInput {
+            flex-grow: 1;
+        }
+
+        .message-footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: var(--card-background-color);
+            border-top: 1px solid var(--card-border-color);
+            padding: 1rem;
+            box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .message-footer .container {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            padding-top: 0;
+        }
+
+        #messageInput {
+            flex-grow: 1;
+            resize: none;
+            min-height: 50px;
+        }
+
+        #sendBtn {
+            min-width: 100px;
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        #sendBtn:hover {
+            background-color: var(--primary-hover-color);
+            border-color: var(--primary-hover-color);
+        }
+
+        .status-toast {
+            position: fixed;
+            bottom: 7rem; /* Above the footer */
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            color: white;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s, transform 0.3s;
+            z-index: 1000;
+            pointer-events: none;
+            transform: translate(-50%, 20px);
+        }
+
+        .status-toast.visible {
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(-50%);
+        }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <hgroup>
+            <h1>VRChat-WebChat</h1>
+            <h2>通过网页向 VRChat 发送消息</h2>
+        </hgroup>
+
+        <div class="card">
+            <header>
+                <h3 style="margin-bottom: 1rem;">预设词</h3>
+            </header>
+            <div id="presetContainer" class="preset-buttons">
+                {% for word in preset_words %}
+                    <button class="preset-button" onclick="fillPreset('{{ word }}')">{{ word }}</button>
+                {% endfor %}
+            </div>
+            <div class="add-preset-form">
+                <input type="text" id="addPresetInput" placeholder="添加新的预设词...">
+                <button id="addPresetBtn" onclick="addPreset()">添加</button>
+            </div>
+        </div>
+    </main>
+
+    <footer class="message-footer">
+        <div class="container">
+            <textarea id="messageInput" placeholder="在这里输入消息... (Enter 发送)" rows="1"></textarea>
+            <button id="sendBtn" onclick="sendMessage()">发送</button>
+        </div>
+    </footer>
+
+    <div id="statusToast" class="status-toast"></div>
+
+    <script>
+        const messageInput = document.getElementById('messageInput');
+        const presetContainer = document.getElementById('presetContainer');
+        const addPresetInput = document.getElementById('addPresetInput');
+        const statusToast = document.getElementById('statusToast');
+
+        function showToast(message, success = true) {
+            statusToast.textContent = message;
+            statusToast.style.backgroundColor = success ? '#28a745' : '#dc3545'; // Green for success, Red for error
+            statusToast.classList.add('visible');
+            setTimeout(() => {
+                statusToast.classList.remove('visible');
+            }, 2500);
+        }
+
+        function fillPreset(text) {
+            messageInput.value = text;
+            messageInput.focus();
+        }
+
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            try {
+                const response = await fetch('/api/send_message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ s: message, n: true })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    messageInput.value = '';
+                    showToast('消息已发送');
+                } else {
+                    showToast(`发送失败: ${data.error}`, false);
+                }
+            } catch (error) {
+                showToast('网络错误，无法发送', false);
+            }
+        }
+
+        async function addPreset() {
+            const newWord = addPresetInput.value.trim();
+            if (!newWord) return;
+
+            try {
+                const response = await fetch('/api/presets', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ word: newWord })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    addPresetInput.value = '';
+                    const button = document.createElement('button');
+                    button.className = 'preset-button';
+                    button.textContent = data.word;
+                    button.onclick = () => fillPreset(data.word);
+                    presetContainer.appendChild(button);
+                    showToast('预设词已添加');
+                } else {
+                    showToast(`添加失败: ${data.error}`, false);
+                }
+            } catch (error) {
+                showToast('网络错误，无法添加', false);
+            }
+        }
+        
+        messageInput.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        });
+
+        addPresetInput.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                addPreset();
+            }
+        });
+    </script>
+</body>
+</html>
